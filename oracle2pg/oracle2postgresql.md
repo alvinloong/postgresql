@@ -95,7 +95,7 @@ COMMIT;
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | ALTER TABLE company ADD gender CHAR(1);                      | ALTER TABLE company ADD gender CHAR(1);                      |
 | ALTER TABLE company ADD gender CHAR(1) DEFAULT 'M';          | ALTER TABLE company ADD gender CHAR(1) DEFAULT 'M';          |
-| DESC company;<br/>SELECT * FROM user_tab_columns WHERE table_name = upper('company'); | \d company                                                   |
+| DESC company;<br/>SELECT * FROM user_tab_columns WHERE table_name = upper('company'); | DESC company;<br/>\d company                                 |
 | ALTER TABLE company MODIFY gender CHAR(2);                   | ALTER TABLE company ALTER gender TYPE CHAR(2);               |
 | ALTER TABLE company MODIFY gender NOT NULL;                  | ALTER TABLE company ALTER gender SET NOT NULL;               |
 | ALTER TABLE company MODIFY gender NULL;                      | ALTER TABLE company ALTER gender DROP NOT NULL;              |
@@ -105,6 +105,10 @@ COMMIT;
 | ALTER TABLE company DROP COLUMN gender;                      | ALTER TABLE company DROP COLUMN gender;                      |
 | TRUNCATE TABLE company;                                      | TRUNCATE TABLE company;                                      |
 | DROP TABLE company;                                          | DROP TABLE company;                                          |
+
+## SEQUENCE
+
+After data migration, should update SEQUENCE values.
 
 ## TRIGGER
 
@@ -382,6 +386,33 @@ Executing a Command with No Result
 ```
 PERFORM query;
 PERFORM create_mv('cs_session_page_requests_mv', my_query);
+```
+
+### SECURITY DEFINER
+
+```
+CREATE FUNCTION check_password(uname TEXT, pass TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE passed BOOLEAN;
+BEGIN
+        SELECT  (pwd = $2) INTO passed
+        FROM    pwds
+        WHERE   username = $1;
+
+        RETURN passed;
+END;
+$$  LANGUAGE plpgsql
+    SECURITY DEFINER
+    -- Set a secure search_path: trusted schema(s), then 'pg_temp'.
+    SET search_path = admin, pg_temp;
+```
+
+```
+BEGIN;
+CREATE FUNCTION check_password(uname TEXT, pass TEXT) ... SECURITY DEFINER;
+REVOKE ALL ON FUNCTION check_password(uname TEXT, pass TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION check_password(uname TEXT, pass TEXT) TO admins;
+COMMIT;
 ```
 
 ## System Functions
