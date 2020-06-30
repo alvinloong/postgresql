@@ -3,6 +3,7 @@
 | Oracle                                    | PostgreSQL                                    |
 | ----------------------------------------- | --------------------------------------------- |
 | user                                      | user and schema                               |
+| SELECT 1 FROM dual;                       | SELECT 1;                                     |
 | dblink                                    | dblink/oracle_fdw/postgres_fdw                |
 | EXTERNAL TABLES                           | file_fdw                                      |
 | SYNONYM                                   | VIEW                                          |
@@ -52,6 +53,7 @@
 | SELECT sysdate FROM dual;                                    | SELECT now(); SELECT CLOCK_TIMESTAMP();                      |
 | SELECT rownum,rowid FROM dual;                               | SELECT ctid,id,name FROM company;                            |
 | SELECT company_id_seq.nextval FROM dual;                     | SELECT nextval('company_id_seq');                            |
+| SELECT company_id_seq.currval FROM dual;                     | SELECT currval('company_id_seq');                            |
 | SELECT DECODE('a','a','aa','default') dd FROM dual;--aa<br />SELECT CASE 'a' WHEN 'a' THEN 'aa' ELSE 'default' END dd FROM dual;--aa | SELECT CASE 'a' WHEN 'a' THEN 'aa' ELSE 'default' END dd; --aa |
 | SELECT DECODE(NULL,NULL,'NULL','default') dd FROM dual;--NULL<br />SELECT CASE NULL WHEN NULL THEN 'NULL' ELSE 'default' END dd FROM dual;--default | SELECT CASE NULL WHEN NULL THEN 'NULL' ELSE 'default' END dd; --default |
 | SELECT CASE WHEN NULL IS NULL THEN 'NULL' ELSE 'default' END dd FROM dual;--default | SELECT CASE WHEN NULL IS NULL THEN 'NULL' ELSE 'default' END dd; --NULL |
@@ -61,11 +63,30 @@
 | --CONNECT BY<br/>SELECT level FROM dual CONNECT BY rownum <=10; | --RECURSIVE<br/>WITH RECURSIVE t(n) AS<br/>  ( SELECT 1<br/>  UNION<br/>  SELECT n+1 FROM t WHERE n < 10<br/>  )<br/>SELECT * FROM t; |
 | --NULL vs empty string<br/>SELECT * FROM dual WHERE '' IS NULL;--X<br/>SELECT CASE WHEN '' IS NULL THEN 'NULL' ELSE 'default' END dd FROM dual;--NULL | --NULL vs empty string<br/>SELECT '' IS NULL;--f<br/>SELECT '' IS NOT NULL;--t<br/>SELECT CASE WHEN '' IS NULL THEN 'NULL' ELSE 'default' END dd;--default |
 | INSERT INTO company (id,name,age,address) VALUES (3, 'Allen3', 25, 'Texas');<br/>COMMIT; | INSERT INTO company (id,name,age,address) VALUES (3, 'Allen3', 25, 'Texas'); |
+| SELECT ROWNUM, i_number, i_name FROM inventory_table;        | SELECT ROW_NUMBER() OVER(), i_number, i_name FROM inventory_table; |
 | ROWNUM = N                                                   | LIMIT 1 OFFSET N                                             |
 | ROWNUM <= N                                                  | LIMIT N                                                      |
 | ROWNUM >= N                                                  | LIMIT ALL OFFSET N                                           |
 | field1 IS NULL                                               | coalesce(field1::text, '') = ''                              |
 | field2 IS NOT NULL                                           | field2 IS NOT NULL AND field2::text<> ''                     |
+| SELECT * FROM staff_table WHERE job < 'A00';                 | SELECT * FROM staff_table WHERE job < 'A00' AND job != '';   |
+| MERGE INTO new_inventory_table N <br/> USING ( SELECT i_number, <br/> i_name, <br/> i_quantity, <br/> i_warehouse <br/> FROM inventory_table ) I <br/> ON ( N.i_number = I.i_number ) <br/> WHEN MATCHED THEN <br/>     UPDATE SET N.i_quantity = I.i_quantity <br/> WHEN NOT MATCHED THEN <br/>     INSERT ( N.i_number, <br/> N.i_name, <br/> N.i_quantity, <br/> N.i_warehouse ) <br/>     VALUES ( I.i_number, <br/> I.i_name, <br/> I.i_quantity, <br/> I.i_warehouse ); | INSERT INTO new_inventory_table AS N ( <br/>             i_number, <br/>             i_name, <br/>             i_quantity, <br/>             i_warehouse <br/>            ) <br/> SELECT i_number, <br/>        i_name, <br/>        i_quantity, <br/>        i_warehouse <br/> FROM inventory_table <br/> ON CONFLICT (i_number) DO UPDATE <br/> SET i_quantity = excluded.i_quantity; |
+| INSERT INTO attendance_table VALUES( '1001', 'i', TIMESTAMP'2016-05-20 12:30:00 +09:00' ); | INSERT INTO attendance_table VALUES( '1001',   'i', TIMESTAMP WITH TIME ZONE'2016-05-20 12:30:00 +09:00' ); |
+| SELECT staff_id, name, manager_id   FROM staff_table   START WITH staff_id = '1001'   CONNECT BY PRIOR staff_id = manager_id; | WITH RECURSIVE staff_table_w( staff_id, <br/> name, <br/> manager_id ) AS <br/> ( SELECT staff_id, name, manager_id <br/>       FROM staff_table <br/>       WHERE staff_id = '1001' <br/>     UNION ALL <br/>     SELECT n.staff_id, n.name, n.manager_id <br/>       FROM staff_table n, staff_table_w w <br/>       WHERE w.staff_id = n.manager_id ) <br/> SELECT staff_id, name, manager_id <br/> FROM staff_table_w; |
+| SELECT staff_id, name, manager_id, LEVEL   FROM staff_table   START WITH staff_id = '1001'   CONNECT BY PRIOR staff_id = manager_id; | WITH RECURSIVE staff_table_w( staff_id, <br/>                name, <br/>                manager_id, <br/>                "LEVEL"  ) AS <br/>   ( SELECT staff_id, name, manager_id, 1 <br/>       FROM staff_table <br/>       WHERE staff_id = '1001' <br/>     UNION ALL <br/>     SELECT n.staff_id, <br/>            n.name, <br/>            n.manager_id, <br/>            w."LEVEL" + 1 <br/>       FROM staff_table n, staff_table_w w <br/>       WHERE w.staff_id = n.manager_id ) <br/> SELECT staff_id, name, manager_id, "LEVEL"  <br/> FROM staff_table_w; |
+| SELECT i_number, i_name FROM inventory_table <br/>  WHERE i_warehouse = 2 <br/> MINUS <br/> SELECT i_number, i_name FROM inventory_table <br/>  WHERE i_name = 'cd'; | SELECT i_number, i_name FROM inventory_table <br/>  WHERE i_warehouse = 2 <br/> EXCEPT <br/> SELECT i_number, i_name FROM inventory_table <br/>  WHERE i_name = 'cd'; |
+
+**Oracle**
+
+```
+SELECT 'NAME:' || name FROM staff_table;
+```
+
+**PostgreSQL**
+
+```
+SELECT 'NAME:' || COALESCE( name, '' ) FROM staff_table;
+```
 
 ## COMMIT for DML/DDL
 
@@ -105,6 +126,20 @@ COMMIT;
 | ALTER TABLE company DROP COLUMN gender;                      | ALTER TABLE company DROP COLUMN gender;                      |
 | TRUNCATE TABLE company;                                      | TRUNCATE TABLE company;                                      |
 | DROP TABLE company;                                          | DROP TABLE company;                                          |
+
+## INDEX
+
+Oracle
+
+```
+ALTER INDEX idx REBUILD;
+```
+
+PostgreSQL
+
+```
+REINDEX INDEX idx;
+```
 
 ## SEQUENCE
 
@@ -415,6 +450,29 @@ GRANT EXECUTE ON FUNCTION check_password(uname TEXT, pass TEXT) TO admins;
 COMMIT;
 ```
 
+## ALTER SESSION
+
+Oracle
+
+```
+ALTER SESSION SET TIME_ZONE = '+09:00';
+```
+
+PostgreSQL
+
+```
+SET TimeZone='UTC';
+```
+
+## GRANT
+
+| Oracle                                                       | PostgreSQL                            |
+| ------------------------------------------------------------ | ------------------------------------- |
+| GRANT CREATE ROLE TO roleName<br/>GRANT ALTER ANY ROLE TO roleName<br/>GRANT DROP ANY ROLE TO roleName<br/>GRANT ANY ROLE TO roleName | ALTER ROLE *roleName* CREATEROLE;     |
+| GRANT CREATE USER TO userName<br/>GRANT ALTER USER TO userName<br/>GRANT DROP USER TO userName | ALTER ROLE *userName* CREATEUSER      |
+| GRANT CREATE TABLE TO user1;                                 | GRANT CREATE ON SCHEMA scm1 TO user1; |
+
+
 ## System Functions
 
 ### TRUNC
@@ -429,6 +487,26 @@ PostgreSQL
 
 ```
 DATE_TRUNC('day', create_dt)
+```
+
+### REGEXP_LIKE
+
+Oracle
+
+```
+SELECT i_number, i_name, i_quantity 
+ FROM inventory_table 
+ WHERE REGEXP_LIKE( i_name, '^tel' ) 
+ ORDER BY i_number;
+```
+
+PostgreSQL
+
+```
+SELECT i_number, i_name, i_quantity 
+ FROM inventory_table 
+ WHERE i_name ~ '^tel' 
+ ORDER BY i_number;
 ```
 
 ### instr
@@ -567,7 +645,9 @@ $$ LANGUAGE plpgsql STRICT IMMUTABLE;
 
 # Tool
 
-[ora2pg](http://www.ora2pg.com) - Oracle to PostgreSQL migration tool for both data and schema. Refer to its [doc](http://www.ora2pg.com/documentation.html) for more details.
+## [ora2pg](http://www.ora2pg.com)
+
+Oracle to PostgreSQL migration tool for both data and schema. Refer to its [doc](http://www.ora2pg.com/documentation.html) for more details.
 
 Example configuration file
 
@@ -592,3 +672,12 @@ export ORACLE_HOME=/usr/lib/oracle/12.2/client64
 export PATH=/usr/lib/oracle/12.2/client64/bin:$PATH
 ./export_schema.sh | tee -a export.log
 ```
+
+## [orafce](https://pgxn.org/dist/orafce/)
+
+This module allows use a well known Oracle's functions and packages inside PostgreSQL.
+
+
+
+
+

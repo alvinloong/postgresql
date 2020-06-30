@@ -1,5 +1,211 @@
 # [The SQL Language](https://www.postgresql.org/docs/current/sql.html)
 
+## [Data Types](https://www.postgresql.org/docs/current/datatype.html)
+
+### [Arrays](https://www.postgresql.org/docs/current/arrays.html)
+
+#### [Declaration of Array Types](https://www.postgresql.org/docs/current/arrays.html#ARRAYS-DECLARATION)
+
+```
+CREATE TABLE sal_emp (
+    name            text,
+    pay_by_quarter  integer[],
+    schedule        text[][]
+);
+CREATE TABLE tictactoe (
+    squares   integer[3][3]
+);
+pay_by_quarter  integer ARRAY[4],
+pay_by_quarter  integer ARRAY,
+```
+
+#### [Array Value Input](https://www.postgresql.org/docs/current/arrays.html#ARRAYS-INPUT)
+
+```
+INSERT INTO sal_emp
+    VALUES ('Bill',
+    '{10000, 10000, 10000, 10000}',
+    '{{"meeting", "lunch"}, {"training", "presentation"}}');
+INSERT INTO sal_emp
+    VALUES ('Carol',
+    '{20000, 25000, 25000, 25000}',
+    '{{"breakfast", "consulting"}, {"meeting", "lunch"}}');
+SELECT * FROM sal_emp;
+INSERT INTO sal_emp
+    VALUES ('Bill',
+    ARRAY[10000, 10000, 10000, 10000],
+    ARRAY[['meeting', 'lunch'], ['training', 'presentation']]);
+
+INSERT INTO sal_emp
+    VALUES ('Carol',
+    ARRAY[20000, 25000, 25000, 25000],
+    ARRAY[['breakfast', 'consulting'], ['meeting', 'lunch']]);
+```
+
+#### [Accessing Arrays](https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING)
+
+```
+SELECT name FROM sal_emp WHERE pay_by_quarter[1] <> pay_by_quarter[2];
+SELECT pay_by_quarter[3] FROM sal_emp;
+SELECT schedule[1:2][1:1] FROM sal_emp WHERE name = 'Bill';
+SELECT schedule[1:2][2] FROM sal_emp WHERE name = 'Bill';
+SELECT schedule[:2][2:] FROM sal_emp WHERE name = 'Bill';
+SELECT schedule[:][1:1] FROM sal_emp WHERE name = 'Bill';
+SELECT array_dims(schedule) FROM sal_emp WHERE name = 'Carol';
+SELECT array_upper(schedule, 1) FROM sal_emp WHERE name = 'Carol';
+SELECT array_length(schedule, 1) FROM sal_emp WHERE name = 'Carol';
+SELECT cardinality(schedule) FROM sal_emp WHERE name = 'Carol';
+```
+
+#### [Modifying Arrays](https://www.postgresql.org/docs/current/arrays.html#ARRAYS-MODIFYING)
+
+```
+UPDATE sal_emp SET pay_by_quarter = '{25000,25000,27000,27000}'
+    WHERE name = 'Carol';
+UPDATE sal_emp SET pay_by_quarter = ARRAY[25000,25000,27000,27000]
+    WHERE name = 'Carol';
+UPDATE sal_emp SET pay_by_quarter[4] = 15000
+    WHERE name = 'Bill';
+UPDATE sal_emp SET pay_by_quarter[1:2] = '{27000,27000}'
+    WHERE name = 'Carol';
+SELECT ARRAY[1,2] || ARRAY[3,4];
+SELECT ARRAY[5,6] || ARRAY[[1,2],[3,4]];
+SELECT array_dims(1 || '[0:1]={2,3}'::int[]);
+SELECT array_dims(ARRAY[1,2] || 3);
+SELECT array_dims(ARRAY[1,2] || ARRAY[3,4,5]);
+SELECT array_dims(ARRAY[[1,2],[3,4]] || ARRAY[[5,6],[7,8],[9,0]]);
+SELECT array_dims(ARRAY[1,2] || ARRAY[[3,4],[5,6]]);
+SELECT array_prepend(1, ARRAY[2,3]);
+SELECT array_append(ARRAY[1,2], 3);
+SELECT array_cat(ARRAY[1,2], ARRAY[3,4]);
+SELECT array_cat(ARRAY[[1,2],[3,4]], ARRAY[5,6]);
+SELECT array_cat(ARRAY[5,6], ARRAY[[1,2],[3,4]]);
+SELECT ARRAY[1, 2] || '{3, 4}';  -- the untyped literal is taken as an array
+SELECT ARRAY[1, 2] || NULL;                -- so is an undecorated NULL
+SELECT array_append(ARRAY[1, 2], NULL);    -- this might have been meant
+```
+
+#### [Searching in Arrays](https://www.postgresql.org/docs/current/arrays.html#ARRAYS-SEARCHING)
+
+```
+SELECT * FROM sal_emp WHERE pay_by_quarter[1] = 10000 OR
+                            pay_by_quarter[2] = 10000 OR
+                            pay_by_quarter[3] = 10000 OR
+                            pay_by_quarter[4] = 10000;
+SELECT * FROM sal_emp WHERE 10000 = ANY (pay_by_quarter);
+SELECT * FROM sal_emp WHERE 10000 = ALL (pay_by_quarter);
+SELECT * FROM
+   (SELECT pay_by_quarter,
+           generate_subscripts(pay_by_quarter, 1) AS s
+      FROM sal_emp) AS foo
+ WHERE pay_by_quarter[s] = 10000;
+SELECT * FROM sal_emp WHERE pay_by_quarter && ARRAY[10000];
+SELECT array_position(ARRAY['sun','mon','tue','wed','thu','fri','sat'], 'mon');
+SELECT array_positions(ARRAY[1, 4, 3, 1, 3, 4, 2, 1], 1);
+```
+
+#### [Array Input and Output Syntax](https://www.postgresql.org/docs/current/arrays.html#ARRAYS-IO)
+
+```
+SELECT f1[1][-2][3] AS e1, f1[1][-1][5] AS e2
+ FROM (SELECT '[1:1][-2:-1][3:5]={{{1,2,3},{4,5,6}}}'::int[] AS f1) AS ss;
+```
+
+### [Composite Types](https://www.postgresql.org/docs/current/rowtypes.html)
+
+#### [Declaration of Composite Types](https://www.postgresql.org/docs/current/rowtypes.html#ROWTYPES-DECLARING)
+
+```
+CREATE TYPE complex AS (
+    r       double precision,
+    i       double precision
+);
+
+CREATE TYPE inventory_item AS (
+    name            text,
+    supplier_id     integer,
+    price           numeric
+);
+
+CREATE TABLE on_hand (
+    item      inventory_item,
+    count     integer
+);
+
+INSERT INTO on_hand VALUES (ROW('fuzzy dice', 42, 1.99), 1000);
+
+CREATE FUNCTION price_extension(inventory_item, integer) RETURNS numeric
+AS 'SELECT $1.price * $2' LANGUAGE SQL;
+
+SELECT price_extension(item, 10) FROM on_hand;
+
+CREATE TABLE inventory_item (
+    name            text,
+    supplier_id     integer REFERENCES suppliers,
+    price           numeric CHECK (price > 0)
+);
+```
+
+#### [Constructing Composite Values](https://www.postgresql.org/docs/current/rowtypes.html#id-1.5.7.24.6)
+
+```
+'("fuzzy dice",42,1.99)'
+'("fuzzy dice",42,)'
+'("",42,)'
+ROW('fuzzy dice', 42, 1.99)
+ROW('', 42, NULL)
+('fuzzy dice', 42, 1.99)
+('', 42, NULL)
+```
+
+#### [Accessing Composite Types](https://www.postgresql.org/docs/current/rowtypes.html#ROWTYPES-ACCESSING)
+
+```
+SELECT item.name FROM on_hand WHERE item.price > 9.99;
+SELECT (item).name FROM on_hand WHERE (item).price > 9.99;
+SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9.99;
+SELECT (my_func(...)).field FROM ...
+```
+
+#### [Modifying Composite Types](https://www.postgresql.org/docs/current/rowtypes.html#id-1.5.7.24.8)
+
+```
+INSERT INTO mytab (complex_col) VALUES((1.1,2.2));
+UPDATE mytab SET complex_col = ROW(1.1,2.2) WHERE ...;
+UPDATE mytab SET complex_col.r = (complex_col).r + 1 WHERE ...;
+INSERT INTO mytab (complex_col.r, complex_col.i) VALUES(1.1, 2.2);
+```
+
+#### [Using Composite Types in Queries](https://www.postgresql.org/docs/current/rowtypes.html#ROWTYPES-USAGE)
+
+```
+SELECT c FROM inventory_item c;
+SELECT c.* FROM inventory_item c;
+SELECT c.name, c.supplier_id, c.price FROM inventory_item c;
+SELECT (myfunc(x)).* FROM some_table;
+SELECT (myfunc(x)).a, (myfunc(x)).b, (myfunc(x)).c FROM some_table;
+SELECT somefunc(c.*) FROM inventory_item c;
+SELECT somefunc(c) FROM inventory_item c;
+SELECT * FROM inventory_item c ORDER BY c;
+SELECT * FROM inventory_item c ORDER BY c.*;
+SELECT * FROM inventory_item c ORDER BY ROW(c.*);
+SELECT * FROM inventory_item c ORDER BY ROW(c.name, c.supplier_id, c.price);
+SELECT * FROM inventory_item c ORDER BY (c.name, c.supplier_id, c.price);
+SELECT c.name FROM inventory_item c WHERE c.price > 1000;
+SELECT name(c) FROM inventory_item c WHERE price(c) > 1000;
+SELECT somefunc(c) FROM inventory_item c;
+SELECT somefunc(c.*) FROM inventory_item c;
+SELECT c.somefunc FROM inventory_item c;
+```
+
+#### [Composite Type Input and Output Syntax](https://www.postgresql.org/docs/current/rowtypes.html#ROWTYPES-IO-SYNTAX)
+
+```
+'(  42)'
+```
+
+the whitespace will be ignored if the field type is integer, but not if it is text.
+
 ## [Functions and Operators](https://www.postgresql.org/docs/current/functions.html)
 
 ### [Sequence Manipulation Functions](https://www.postgresql.org/docs/current/functions-sequence.html)
@@ -550,6 +756,82 @@ SELECT * FROM pg_stat_all_tables WHERE relname='test';
 SELECT pg_stat_get_dead_tuples(oid) FROM pg_class WHERE relname='test';
 ```
 
+# [Server Programming](https://www.postgresql.org/docs/current/server-programming.html)
+
+## [PL/pgSQL - SQL Procedural Language](https://www.postgresql.org/docs/current/plpgsql.html)
+
+### [Tips for Developing in PL/pgSQL](https://www.postgresql.org/docs/current/plpgsql-development-tips.html)
+
+#### [Handling of Quotation Marks](https://www.postgresql.org/docs/current/plpgsql-development-tips.html#PLPGSQL-QUOTE-TIPS)
+
+```
+CREATE OR REPLACE FUNCTION testfunc(integer) RETURNS integer AS $PROC$
+          ....
+$PROC$ LANGUAGE plpgsql;
+
+CREATE FUNCTION foo() RETURNS integer AS '
+          ....
+' LANGUAGE plpgsql;
+
+a_output := a_output || '' AND name LIKE ''''foobar'''' AND xyz''
+a_output := a_output || $$ AND name LIKE 'foobar' AND xyz$$
+```
+
+#### [Additional Compile-Time and Run-Time Checks](https://www.postgresql.org/docs/current/plpgsql-development-tips.html#PLPGSQL-EXTRA-CHECKS)
+
+```
+SET plpgsql.extra_warnings TO 'all';
+SET plpgsql.extra_errors TO 'all';
+SET plpgsql.extra_warnings TO 'shadowed_variables';
+SET plpgsql.extra_warnings TO 'strict_multi_assignment';
+SET plpgsql.extra_warnings TO 'too_many_rows';
+
+CREATE FUNCTION foo(f1 int) RETURNS int AS $$
+DECLARE
+f1 int;
+BEGIN
+RETURN f1;
+END
+$$ LANGUAGE plpgsql;
+WARNING:  variable "f1" shadows a previously defined variable
+LINE 3: f1 int;
+        ^
+CREATE FUNCTION
+```
+
+```
+SET plpgsql.extra_warnings TO 'strict_multi_assignment';
+
+CREATE OR REPLACE FUNCTION public.foo()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $$
+DECLARE
+  x int;
+  y int;
+BEGIN
+  SELECT 1 INTO x, y;
+  SELECT 1, 2 INTO x, y;
+  SELECT 1, 2, 3 INTO x, y;
+END;
+$$;
+
+SELECT foo();
+WARNING:  number of source and target fields in assignment does not match
+DETAIL:  strict_multi_assignment check of extra_warnings is active.
+HINT:  Make sure the query returns the exact list of columns.
+WARNING:  number of source and target fields in assignment does not match
+DETAIL:  strict_multi_assignment check of extra_warnings is active.
+HINT:  Make sure the query returns the exact list of columns.
+
+ foo 
+-----
+ 
+(1 row)
+```
+
+### [Porting from Oracle PL/SQL](https://www.postgresql.org/docs/current/plpgsql-porting.html)
+
 # [Reference](https://www.postgresql.org/docs/current/reference.html)
 
 ## [SQL Commands](https://www.postgresql.org/docs/current/sql-commands.html)
@@ -633,6 +915,58 @@ CREATE INDEX CONCURRENTLY idx_test ON public.test USING btree (id, name);
 CREATE UNIQUE INDEX CONCURRENTLY uk_test ON public.test USING btree (name);
 CREATE INDEX CONCURRENTLY idx_test ON public.test USING btree (lower((name)::text) varchar_pattern_ops);
 CREATE INDEX CONCURRENTLY idx_test ON public.test USING gin (to_tsvector('gender'::regconfig, (name)::text));
+```
+
+### [CREATE TYPE](https://www.postgresql.org/docs/current/sql-createtype.html)
+
+```
+CREATE TYPE compfoo AS (f1 int, f2 text);
+
+CREATE FUNCTION getfoo() RETURNS SETOF compfoo AS $$
+    SELECT fooid, fooname FROM foo
+$$ LANGUAGE SQL;
+
+CREATE TYPE bug_status AS ENUM ('new', 'open', 'closed');
+
+CREATE TABLE bug (
+    id serial,
+    description text,
+    status bug_status
+);
+
+CREATE TYPE float8_range AS RANGE (subtype = float8, subtype_diff = float8mi);
+
+CREATE TYPE box;
+
+CREATE FUNCTION my_box_in_function(cstring) RETURNS box AS ... ;
+CREATE FUNCTION my_box_out_function(box) RETURNS cstring AS ... ;
+
+CREATE TYPE box (
+    INTERNALLENGTH = 16,
+    INPUT = my_box_in_function,
+    OUTPUT = my_box_out_function
+);
+
+CREATE TABLE myboxes (
+    id integer,
+    description box
+);
+
+CREATE TYPE box (
+    INTERNALLENGTH = 16,
+    INPUT = my_box_in_function,
+    OUTPUT = my_box_out_function,
+    ELEMENT = float4
+);
+
+CREATE TYPE bigobj (
+    INPUT = lo_filein, OUTPUT = lo_fileout,
+    INTERNALLENGTH = VARIABLE
+);
+CREATE TABLE big_objs (
+    id integer,
+    obj bigobj
+);
 ```
 
 ### **[DO](https://www.postgresql.org/docs/current/sql-do.html)**
@@ -932,4 +1266,10 @@ SELECT * FROM pg_visibility_map('public.test', 0);
 sudo apt install postgresql-contrib
 --oid2name -d test -f 102420
 ```
+
+# Others
+
+## [plpgsql_check](https://pgxn.org/dist/plpgsql_check/)
+
+The plpgsql_check is PostgreSQL extension with functionality for direct or indirect extra validation of functions in plpgsql language. It verifies a validity of SQL identifiers used in plpgsql code. It try to identify a performance issues. Modern versions has integrated profiler. The table and function dependencies can be displayed
 
