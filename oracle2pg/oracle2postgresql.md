@@ -23,6 +23,45 @@
 | RMAN                                      | Barman/wal-e                                  |
 | Data Guard                                | PostgreSQL replication/PgPool/Supervisord     |
 
+# User and Schema
+
+User and schema are same in Oracle. But in Postgres, they are separated.
+
+## One user/schema
+
+**Oracle**
+
+```
+CREATE USER user1 IDENTIFIED BY user1;
+```
+
+**Postgres**
+
+```
+CREATE USER user1 WITH PASSWORD 'user1';
+CREATE SCHEMA user1;
+ALTER SCHEMA user1 OWNER TO user1;
+ALTER USER user1 SET search_path TO "$user";
+```
+
+## More than one schema
+
+**Oracle**
+
+```
+CREATE USER user1 IDENTIFIED BY user1;
+```
+
+**Postgres**
+
+```
+CREATE SCHEMA schema1;
+ALTER SCHEMA schema1 OWNER TO user1;
+CREATE SCHEMA schema2;
+ALTER SCHEMA schema2 OWNER TO user1;
+ALTER USER user1 SET search_path TO schema1, schema2;
+```
+
 # Data Types
 
 | Oracle                         | PostgreSQL                    |
@@ -88,28 +127,6 @@ SELECT 'NAME:' || name FROM staff_table;
 SELECT 'NAME:' || COALESCE( name, '' ) FROM staff_table;
 ```
 
-## COMMIT for DML/DDL
-
-**Oracle**
-
-DML: 'COMMIT' needed.
-
-DDL: 'COMMIT' not needed.
-
-**PostgreSQL**
-
-DML: 'COMMIT' needed if in transaction.
-
-DDL: 'COMMIT' needed if in transaction.
-
-```
-BEGIN;
-CREATE TABLE caudit
-  ( emp_id INT NOT NULL, entry_date text NOT NULL
-  );
-COMMIT;
-```
-
 ## TABLE
 
 | Oracle                                                       | PostgreSQL                                                   |
@@ -133,13 +150,27 @@ Oracle
 
 ```
 ALTER INDEX idx REBUILD;
+CREATE TABLE table1(
+col1 INT NOT NULL,
+col2 INT
+);
+CREATE UNIQUE INDEX iuk_table1_col1_col2 ON table1(col1,col2);
 ```
+
+In table1, two (1,null) records will conflict.
 
 PostgreSQL
 
 ```
 REINDEX INDEX idx;
+CREATE TABLE table1(
+col1 INT NOT NULL,
+col2 INT
+);
+CREATE UNIQUE INDEX iuk_table1_col1_col2 ON table1(col1, coalesce(col2,-1));
 ```
+
+In table1, two (1,null) records will NOT conflict, so need to use function based index.
 
 ## SEQUENCE
 
@@ -450,6 +481,28 @@ GRANT EXECUTE ON FUNCTION check_password(uname TEXT, pass TEXT) TO admins;
 COMMIT;
 ```
 
+## COMMIT for DML/DDL
+
+**Oracle**
+
+DML: 'COMMIT' needed.
+
+DDL: 'COMMIT' not needed.
+
+**PostgreSQL**
+
+DML: 'COMMIT' needed if in transaction.
+
+DDL: 'COMMIT' needed if in transaction.
+
+```
+BEGIN;
+CREATE TABLE caudit
+  ( emp_id INT NOT NULL, entry_date text NOT NULL
+  );
+COMMIT;
+```
+
 ## ALTER SESSION
 
 Oracle
@@ -507,6 +560,20 @@ SELECT i_number, i_name, i_quantity
  FROM inventory_table 
  WHERE i_name ~ '^tel' 
  ORDER BY i_number;
+```
+
+### md5
+
+Oracle
+
+```
+SELECT RAWTOHEX (DBMS_OBFUSCATION_TOOLKIT.md5 (input => UTL_RAW.cast_to_raw ('password'))) FROM dual;	
+```
+
+PostgreSQL
+
+```
+SELECT md5('password');
 ```
 
 ### instr
