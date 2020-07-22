@@ -760,6 +760,127 @@ SELECT pg_stat_get_dead_tuples(oid) FROM pg_class WHERE relname='test';
 
 ## [PL/pgSQL - SQL Procedural Language](https://www.postgresql.org/docs/current/plpgsql.html)
 
+### [Cursors](https://www.postgresql.org/docs/current/plpgsql-cursors.html)
+
+#### [Using Cursors](https://www.postgresql.org/docs/current/plpgsql-cursors.html#PLPGSQL-CURSOR-USING)
+
+##### Returning Cursors
+
+```
+CREATE TABLE test (col text);
+INSERT INTO test VALUES ('123');
+
+CREATE FUNCTION reffunc(refcursor) RETURNS refcursor AS '
+BEGIN
+    OPEN $1 FOR SELECT col FROM test;
+    RETURN $1;
+END;
+' LANGUAGE plpgsql;
+
+BEGIN;
+SELECT reffunc('funccursor');
+FETCH ALL IN funccursor;
+COMMIT;
+```
+
+**Procedure** with INOUT refcursor
+
+```
+CREATE TABLE test (col text);
+INSERT INTO test VALUES ('123');
+
+CREATE PROCEDURE myproc(ref_cur INOUT refcursor) AS
+$$
+BEGIN
+    OPEN ref_cur FOR SELECT * FROM test;
+END;
+$$ LANGUAGE plpgsql;
+
+DO
+$$
+DECLARE
+my_cur refcursor;
+c1 text;
+BEGIN
+CALL myproc(my_cur);
+FETCH my_cur INTO c1;
+LOOP
+EXIT WHEN NOT FOUND;
+RAISE NOTICE 'c1:%',c1;
+FETCH my_cur INTO c1;
+END LOOP;
+CLOSE my_cur;
+END;
+$$;
+```
+
+The following example uses automatic cursor name generation:
+
+```
+CREATE FUNCTION reffunc2() RETURNS refcursor AS '
+DECLARE
+    ref_cur refcursor;
+BEGIN
+    OPEN ref_cur FOR SELECT col FROM test;
+    RETURN ref_cur;
+END;
+' LANGUAGE plpgsql;
+
+-- need to be in a transaction to use cursors.
+BEGIN;
+SELECT reffunc2();
+
+      reffunc2
+--------------------
+ <unnamed cursor 1>
+(1 row)
+
+FETCH ALL IN "<unnamed portal 1>";
+COMMIT;
+```
+
+The following example shows one way to return multiple cursors from a single function:
+
+```
+CREATE FUNCTION myfunc(refcursor, refcursor) RETURNS SETOF refcursor AS $$
+BEGIN
+    OPEN $1 FOR SELECT * FROM table_1;
+    RETURN NEXT $1;
+    OPEN $2 FOR SELECT * FROM table_2;
+    RETURN NEXT $2;
+END;
+$$ LANGUAGE plpgsql;
+
+-- need to be in a transaction to use cursors.
+BEGIN;
+
+SELECT * FROM myfunc('a', 'b');
+
+FETCH ALL FROM a;
+FETCH ALL FROM b;
+COMMIT;
+```
+
+Open cursors in a different way for calling by Java, etc.
+
+```
+CREATE FUNCTION myfunc2(INOUT refcursor, INOUT refcursor) RETURNS RECORD AS $$
+BEGIN
+    OPEN $1 FOR SELECT * FROM table_1;
+    OPEN $2 FOR SELECT * FROM table_2;
+END;
+$$ LANGUAGE plpgsql;
+
+-- need to be in a transaction to use cursors.
+BEGIN;
+
+SELECT * FROM myfunc('a', 'b');
+
+FETCH ALL FROM a;
+FETCH ALL FROM b;
+COMMIT;
+```
+
 ### [Tips for Developing in PL/pgSQL](https://www.postgresql.org/docs/current/plpgsql-development-tips.html)
 
 #### [Handling of Quotation Marks](https://www.postgresql.org/docs/current/plpgsql-development-tips.html#PLPGSQL-QUOTE-TIPS)
