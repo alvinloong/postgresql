@@ -1,4 +1,4 @@
-# [The SQL Language](https://www.postgresql.org/docs/current/sql.html)
+# [pg_locksThe SQL Language](https://www.postgresql.org/docs/current/sql.html)
 
 ## [Data Types](https://www.postgresql.org/docs/current/datatype.html)
 
@@ -253,7 +253,10 @@ SELECT pg_walfile_name(pg_current_wal_lsn());
 SELECT pg_walfile_name_offset(pg_current_wal_lsn());
 SELECT pg_current_wal_lsn(),pg_current_wal_insert_lsn(),pg_current_wal_flush_lsn();
 SELECT pg_current_wal_lsn(),pg_current_wal_insert_lsn(),pg_current_wal_flush_lsn(),pg_walfile_name(pg_current_wal_lsn()),pg_walfile_name_offset(pg_current_wal_lsn());
-
+SELECT
+    application_name,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn)) AS diff
+FROM pg_stat_replication; 
 ```
 
 [9.x](https://www.postgresql.org/docs/9.6/functions-admin.html)
@@ -263,6 +266,10 @@ SELECT pg_switch_xlog();
 SELECT pg_current_xlog_location();
 SELECT pg_switch_xlog();
 SELECT pg_size_pretty(pg_xlog_location_diff('0/16596F0','0/1659580'));
+SELECT
+    application_name,
+    pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), replay_location)) AS diff
+FROM pg_stat_replication; 
 ```
 
 #### [Database Object Management Functions](https://www.postgresql.org/docs/12/functions-admin.html#FUNCTIONS-ADMIN-DBOBJECT)
@@ -743,8 +750,14 @@ ORDER BY
     state;
 ```
 
+###### pg_stat_replication
+
 ```
-SELECT * FROM pg_stat_replication;
+SELECT * FROM pg_stat_replication; 
+SELECT
+    application_name,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn)) AS diff
+FROM pg_stat_replication; 
 ```
 
 ##### Collected Statistics Views
@@ -957,6 +970,12 @@ HINT:  Make sure the query returns the exact list of columns.
 
 ## [SQL Commands](https://www.postgresql.org/docs/current/sql-commands.html)
 
+### [ALTER INDEX](https://www.postgresql.org/docs/current/sql-alterindex.html)
+
+```
+ALTER INDEX test_id_idx_2 RENAME TO test_id_idx;
+```
+
 ### [ALTER SEQUENCE](https://www.postgresql.org/docs/current/sql-altersequence.html)
 
 #### OWNER
@@ -1036,6 +1055,12 @@ CREATE INDEX CONCURRENTLY idx_test ON public.test USING btree (id, name);
 CREATE UNIQUE INDEX CONCURRENTLY uk_test ON public.test USING btree (name);
 CREATE INDEX CONCURRENTLY idx_test ON public.test USING btree (lower((name)::text) varchar_pattern_ops);
 CREATE INDEX CONCURRENTLY idx_test ON public.test USING gin (to_tsvector('gender'::regconfig, (name)::text));
+```
+
+### [CREATE TABLE](https://www.postgresql.org/docs/current/sql-createtable.html)
+
+```
+CREATE TABLE test2 (LIKE test INCLUDING ALL);
 ```
 
 ### [CREATE TYPE](https://www.postgresql.org/docs/current/sql-createtype.html)
@@ -1183,6 +1208,8 @@ pgbench -i test
 pgbench -i -s 20 test
 pgbench -i -I dtp -d test
 pgbench -r -P 1 -T 10 test
+pgbench -r -P 1 -T 10 -M prepared test
+pgbench -r -P 1 -T 10 -M prepared -c 3 test
 pgbench -r -P 1 -c 30 -T 10 test
 pgbench -r -P 1 -c 4 -j 2 -T 10 test
 pgbench -r -P 1 -c 4 -j 2 -T 10 -S test
@@ -1227,6 +1254,26 @@ cd /usr/lib/postgresql/12/bin
 ```
 ./pg_controldata /var/lib/postgresql/12/main
 ./pg_controldata -D /var/lib/postgresql/12/main
+```
+
+### [pg_ctl](https://www.postgresql.org/docs/current/app-pg-ctl.html)
+
+```
+export PGDATA=/var/lib/postgresql/12/main
+pg_ctl reload
+pg_ctl status
+pg_ctl start
+pg_ctl stop
+pg_ctl restart
+pg_ctl promote
+pg_ctl reload -D /var/lib/postgresql/12/main
+pg_ctl status -D /var/lib/postgresql/12/main
+pg_ctl start -D /var/lib/postgresql/12/main
+pg_ctl stop -D /var/lib/postgresql/12/main
+pg_ctl restart -D /var/lib/postgresql/12/main
+pg_ctl promote -D /var/lib/postgresql/12/main
+pg_ctl stop -D /var/lib/postgresql/12/main -m fast
+pg_ctl stop -D /var/lib/postgresql/12/main -mf
 ```
 
 ### [pg_waldump](https://www.postgresql.org/docs/current/pgwaldump.html)
